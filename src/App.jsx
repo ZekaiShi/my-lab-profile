@@ -120,7 +120,7 @@ export default function App() {
           `
         }}
       >
-        LAB_01
+        GEO_LAB
       </div>
 
       {/* 3. 漂浮的像素碎片 */}
