@@ -3,29 +3,52 @@ import { Activity, FileText, Cpu, Github, Radio, Terminal, ExternalLink, ArrowRi
 
 // --- 数据配置 ---
 const DATA = {
-  name: "ALEX CHEN",
-  chineseName: "陈 艾",
+  // 1. 这里修正你的名字，不要填 git 命令哦！
+  name: "ZEKAI SHI", 
+  chineseName: "师 泽楷",
   title: "RESEARCH_UNIT: DEEP CONTROL",
-  bio: "Investigating the boundaries between discrete pixels and continuous control. I build agents that understand the physics of the world.",
+  
+  // 2. 这里是你已有的 Bio
+  bio: "Incoming Ph.D. at CAS IGSNRR (from XJTU). I am bridging the gap between Computer Vision and Earth Observation. My mission: Building a Universal Multi-modal Vision-Language Model to decode our planet.",
+  
+  // ---【新增】在这里配置你的社交链接 ---
+  social: {
+    github: "https://github.com/ZekaiShi",
+    scholar: "https://www.researchgate.net/profile/Zekai-Shi?ev=hdr_xprf", // 去 Google Scholar 复制你的链接
+    email: "mailto:shizk2000@outlook.com", // 注意：邮箱前面要加 mailto:
+  },
+
   news: [
-    { date: "2025.12", text: "Paper accepted to ICRA 2026", type: "CONF" },
-    { date: "2025.10", text: "Sim2Real Gap Closed on Unitree-Go1", type: "EXP" },
-    { date: "2025.08", text: "Released 'Pixel-Joystick' Dataset", type: "DATA" }
+    { date: "2024.08", text: "Paper published to Remote Sensing", type: "JOURNAL" },
   ],
+  // 3. 这里是你的论文列表
   papers: [
     {
       id: "P-01",
-      title: "Haptic-Net: Feeling the Terrain via Latent Dynamics",
-      venue: "CVPR 2025 (Oral)",
-      desc: "A transformer-based model interpreting joystick feedback sequences to predict terrain properties before contact.",
-      tags: ["Tactile", "Transformer", "Robotics"]
+      title: "BresNet: Applying Residual Learning in Backpropagation Neural Networks to Predict Ground Surface Concentration of Primary Air Pollutants",
+      venue: "Remote Sensing",
+      desc: "A novel residual learning model improves prediction of multiple air pollutants from satellite data.",
+      tags: ["Residual Learning", "Backpropagation Neural Networks", "Air Pollutants"],
+      // ---【新增】在这里配置每一篇论文的 PDF 和 代码链接 ---
+      links: {
+        pdf: "https://www.mdpi.com/2072-4292/16/16/4003", 
+        code: "#",
+        project: "#"
+      }
     },
     {
       id: "P-02",
-      title: "Low-Bit Quantization for Embedded RL Policies",
-      venue: "ICRA 2024",
-      desc: "Running complex policies on microcontroller-level hardware without losing control precision.",
-      tags: ["Embedded", "RL", "Edge Computing"]
+      title: "Super-resolution reconstruction of 3 arc-second global DEM dataset",
+      venue: "11th Academic Conference of Geology Resource Management and Sustainable Development 2023",
+      // 这里是论文的描述
+      desc: "A deep learning approach improves global DEM resolution, reducing ocean mapping needs.",
+      tags: ["Super-resolution", "Deep Learning", "Global DEM"],
+      // 如果没有链接，可以留空字符串 ""
+      links: {
+        pdf: "#",
+        code: "#",
+        project: "#"
+      }
     }
   ]
 };
@@ -134,11 +157,21 @@ export default function App() {
               {DATA.chineseName} // {DATA.title}
             </p>
           </div>
-          
           <div className="mt-8 md:mt-0 flex gap-4">
-             <MagneticButton setCursor={setCursorVariant} label="GITHUB" icon={<Github size={18}/>} />
-             <MagneticButton setCursor={setCursorVariant} label="SCHOLAR" icon={<Radio size={18}/>} />
-             <MagneticButton setCursor={setCursorVariant} label="EMAIL" icon={<Terminal size={18}/>} />
+            {/* GitHub 按钮 */}
+            <a href={DATA.social.github} target="_blank" rel="noopener noreferrer">
+              <MagneticButton setCursor={setCursorVariant} label="GITHUB" icon={<Github size={18}/>} />
+            </a>
+
+            {/* Scholar 按钮 */}
+            <a href={DATA.social.scholar} target="_blank" rel="noopener noreferrer">
+              <MagneticButton setCursor={setCursorVariant} label="SCHOLAR" icon={<Radio size={18}/>} />
+            </a>
+
+            {/* Email 按钮 (不加 target="_blank" 因为是发邮件) */}
+            <a href={DATA.social.email}>
+              <MagneticButton setCursor={setCursorVariant} label="EMAIL" icon={<Terminal size={18}/>} />
+            </a>
           </div>
         </header>
 
@@ -224,9 +257,10 @@ export default function App() {
                     </p>
 
                     <div className="flex gap-6 font-mono-clean text-sm font-bold">
-                       <ActionLink icon={<FileText size={16}/>} label="PDF_VIEW" />
-                       <ActionLink icon={<Github size={16}/>} label="SOURCE_CODE" />
-                       <ActionLink icon={<ExternalLink size={16}/>} label="PROJECT_PAGE" />
+                       {/* 我们要把 paper.links 传给 ActionLink */}
+                      <ActionLink href={paper.links.pdf} icon={<FileText size={16}/>} label="PDF_VIEW" />
+                      <ActionLink href={paper.links.code} icon={<Github size={16}/>} label="SOURCE_CODE" />
+                      <ActionLink href={paper.links.project} icon={<ExternalLink size={16}/>} label="PROJECT_PAGE" />
                     </div>
                  </TiltCard>
                ))}
@@ -349,9 +383,9 @@ function CustomCursor({ x, y, variant }) {
   );
 }
 
-function ActionLink({ icon, label }) {
+function ActionLink({ icon, label, href }) { // 👈 这里加了 href
   return (
-    <a href="#" className="flex items-center gap-2 hover:text-[#d35400] transition-colors group">
+    <a href={href} target="_blank" className="flex items-center gap-2 hover:text-[#d35400] transition-colors group">
       {icon}
       <span className="border-b border-transparent group-hover:border-[#d35400]">{label}</span>
       <ArrowRight size={14} className="opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
