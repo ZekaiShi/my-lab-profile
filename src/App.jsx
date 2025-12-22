@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Activity, FileText, Cpu, Github, Radio, Terminal, ExternalLink, ArrowRight, Languages, Wifi, Database, ShieldAlert, Ban, Globe, Sparkles, Zap, Monitor, LayoutGrid } from 'lucide-react';
+import { Activity, FileText, Cpu, Github, Radio, Terminal, ExternalLink, ArrowRight, Languages, Wifi, Database, ShieldAlert, Ban, Globe, Sparkles, Zap, Monitor, LayoutGrid, Sun, Moon } from 'lucide-react';
+import { feature } from 'topojson-client';
+import { geoEquirectangular, geoPath } from 'd3-geo';
+import land110m from 'world-atlas/land-110m.json';
 
 // ==========================================
 //               数据配置区域
@@ -122,7 +125,6 @@ function useScifiTypewriter(text) {
   const [displayedText, setDisplayedText] = useState('');
   useEffect(() => {
     let isMounted = true;
-    setDisplayedText(''); 
     const segments = [];
     const regex = /\{([^|]+)\|([^}]+)\}/g;
     let lastIndex = 0; let match;
@@ -187,33 +189,29 @@ function UnifiedCursor({ x, y, variant, theme }) {
 }
 
 // --- 修复版：ThemeSwitcher 必须在 App 外部定义 ---
-function ThemeSwitcher({ theme, setTheme, toast, currentData, setCursorVariant }) {
+function ThemeSwitcher({ theme, setTheme, toast, setCursorVariant }) {
   return (
     <div className="fixed bottom-8 right-8 z-50 flex flex-col gap-3 items-end">
-      {/* Toast 提示 */}
       {toast.show && (
         <div className={`mb-2 px-4 py-2 text-sm shadow-lg border animate-[slide-up_0.2s_ease-out] ${theme === 'retro' ? 'bg-[#cf0000] text-white font-pixel border-white border-2' : 'bg-red-500/10 text-red-200 border-red-500/20 rounded-lg backdrop-blur-md'}`}>
           <div className="flex items-center gap-2"><ShieldAlert size={14}/> {toast.msg}</div>
         </div>
       )}
-      
-      {/* 切换按钮 */}
       <button 
+        aria-label={theme === 'retro' ? '切换到现代深色模式' : '切换到复古浅色模式'}
         onClick={() => setTheme(prev => prev === 'retro' ? 'modern' : 'retro')}
         onMouseEnter={() => setCursorVariant('hover')} 
         onMouseLeave={() => setCursorVariant('default')}
         className={`
-          flex items-center gap-2 px-5 py-3 transition-all duration-500 shadow-xl cursor-pointer
+          relative flex items-center justify-center transition-all duration-300 shadow-xl cursor-pointer
           ${theme === 'retro' 
-            ? 'bg-[#1f3322] text-[#e0e6e0] font-pixel text-xs hover:bg-[#d35400] border-2 border-[#e0e6e0]' 
-            : 'bg-white text-black font-sans font-medium text-sm rounded-full hover:scale-105'
+            ? 'w-12 h-12 rounded-md bg-[#1f3322] text-[#e0e6e0] border-2 border-[#e0e6e0] hover:bg-[#d35400]' 
+            : 'w-12 h-12 rounded-full bg-white text-black hover:scale-105'
           }
         `}
+        title={theme === 'retro' ? '切换到现代模式' : '切换到复古模式'}
       >
-        {theme === 'retro' 
-          ? <><LayoutGrid size={16} /> {currentData.labels.switchModern}</> 
-          : <><Monitor size={16} /> {currentData.labels.switchRetro}</>
-        }
+        {theme === 'retro' ? <Moon size={18} className="opacity-90" /> : <Sun size={20} className="opacity-90" />}
       </button>
     </div>
   );
@@ -270,7 +268,7 @@ function BootScreen({ onComplete }) {
       delay += Math.random() * 200 + 50; 
       setTimeout(() => { setLines(prev => [...prev, line]); if (index === bootText.length - 1) setTimeout(onComplete, 800); }, delay);
     });
-  }, []);
+  }, [onComplete]);
   return (
     <div className="fixed inset-0 bg-black z-[100] p-8 font-mono-cool text-[#33ff33] text-sm leading-relaxed overflow-hidden">
       {lines.map((line, i) => <div key={i} className="mb-1">{line}</div>)}<div className="animate-pulse mt-2">_</div>
@@ -346,6 +344,50 @@ function ModernLink({ href, icon, label, onClick }) {
   );
 }
 
+function WorldDots({ className = "" }) {
+  const [dots, setDots] = useState([]);
+  useEffect(() => {
+    const land = feature(land110m, land110m.objects.land);
+    const width = 2000, height = 1000;
+    const projection = geoEquirectangular().fitExtent([[0, 0], [width, height]], land);
+    const canvas = document.createElement('canvas');
+    canvas.width = width; canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    const path = geoPath(projection, ctx);
+    ctx.beginPath();
+    path(land);
+    const targetPoints = 10000;
+    const spacing = Math.max(10, Math.floor(Math.sqrt((width * height) / targetPoints)));
+    const pts = [];
+    for (let y = spacing / 2; y <= height; y += spacing) {
+      for (let x = spacing / 2; x <= width; x += spacing) {
+        if (ctx.isPointInPath(x, y)) {
+          const dur = 1 + Math.random();
+          const delay = Math.random() * 2;
+          pts.push({ x, y, dur, delay });
+        }
+      }
+    }
+    setDots(pts);
+  }, []);
+  return (
+    <svg viewBox="0 0 2000 1000" className={className}>
+      <g shapeRendering="crispEdges">
+        {dots.map((p, i) => (
+          <circle
+            key={i}
+            cx={p.x}
+            cy={p.y}
+            r="2.6"
+            fill="#cfe0ff"
+            style={{ opacity: 0.95, animation: `randomFade ${p.dur}s ease-in-out infinite`, animationDelay: `${p.delay}s` }}
+          />
+        ))}
+      </g>
+    </svg>
+  );
+}
+
 // ==========================================
 //               主程序入口 & 布局切换
 // ==========================================
@@ -387,6 +429,9 @@ export default function App() {
         @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes turn-on { 0% { transform: scale(1, 0.002) scaleY(0) scaleX(0); opacity: 0; } 60% { transform: scale(1, 0.002) scaleY(1) scaleX(1); opacity: 1; } 100% { transform: scale(1, 1); opacity: 1; } }
         @keyframes slide-up { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        @keyframes dotBlink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
+        @keyframes dotWave { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.15); opacity: 1; } }
+        @keyframes randomFade { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
         
         .font-pixel { font-family: 'Press Start 2P', 'Outfit', 'Noto Sans SC', sans-serif; }
         .font-sans-cool { font-family: 'Outfit', 'Noto Sans SC', sans-serif; }
@@ -405,7 +450,6 @@ export default function App() {
         theme={theme} 
         setTheme={setTheme} 
         toast={toast} 
-        currentData={currentData} 
         setCursorVariant={setCursorVariant} 
       />
 
@@ -492,7 +536,10 @@ export default function App() {
               <div className="lg:col-span-8 animate-enter">
                 <div className="flex items-center gap-3 mb-6"><div className="px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium flex items-center gap-2"><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span></span>{currentData.role}</div><span className="text-zinc-500 text-sm font-mono">// {currentData.title}</span></div>
                 <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-6 leading-[1.1]">{currentData.name === "ZEKAI SHI" ? (<>Building <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Vision</span> for<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">Our Planet.</span></>) : (<>用 <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">视觉技术</span><br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">解码地球。</span></>)}</h1>
-                <p className="text-xl text-zinc-400 leading-relaxed max-w-2xl mb-8 whitespace-pre-wrap">{currentData.bio.replace(/>.*?\n/g, '') .replace(/\[.*?\]:/g, '') .trim()}</p>
+                <div className="relative">
+                  <p className="text-xl text-zinc-400 leading-relaxed max-w-2xl mb-8 whitespace-pre-wrap">{currentData.bio.replace(/^>.*$/gm, '') .replace(/\[.*?\]:/g, '') .replace(/READY_TO_CONNECT_?/g, '') .replace(/等待指令_?/g, '') .trim()}</p>
+                  <WorldDots className="absolute right-0 -top-8 w-[70vw] h-[35vw] opacity-40 pointer-events-none select-none" />
+                </div>
                 <div className="flex flex-wrap gap-4"><a href={currentData.social.github} target="_blank" className="px-6 py-3 rounded-lg bg-white text-black font-semibold hover:bg-zinc-200 transition-colors flex items-center gap-2"><Github size={20} /> GitHub</a><a href={currentData.social.scholar} target="_blank" className="px-6 py-3 rounded-lg bg-white/5 text-white border border-white/10 hover:bg-white/10 transition-colors flex items-center gap-2"><Radio size={20} /> Scholar</a></div>
               </div>
               <div className="lg:col-span-4 animate-enter delay-100">
