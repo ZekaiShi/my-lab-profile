@@ -1,8 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Activity, FileText, Cpu, Github, Radio, Terminal, ExternalLink, ArrowRight, Languages, Wifi, Database, ShieldAlert, Ban, Globe, Sparkles, Zap, Monitor, LayoutGrid, Sun, Moon } from 'lucide-react';
-import { feature } from 'topojson-client';
-import { geoEquirectangular, geoPath } from 'd3-geo';
-import land110m from 'world-atlas/land-110m.json';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Activity, FileText, Cpu, Github, Radio, Terminal, ExternalLink, ArrowRight, Languages, Globe, Sparkles, Zap, Monitor, LayoutGrid, ShieldAlert, Ban, Moon, Sun } from 'lucide-react';
 
 // ==========================================
 //               数据配置区域
@@ -67,8 +64,8 @@ const UI_LABELS = {
     name: "ZEKAI SHI",
     role: "Developer / Researcher",
     title: "Geo Vision Model Developer",
-    bio: "> LOAD_KERNEL: {zekai|ZEKAI} SHI... [OK]\n\nIncoming Ph.D. at CAS IGSNRR (from XJTU).\n\n[MISSION_TARGET]:\nBridging Computer Vision & Earth Observation.\nBuilding a Universal Multi-modal Vision-Language Model to decode our planet.\n\n> STATUS: READY_TO_CONNECT_",
-    intro: "Incoming Ph.D. at CAS IGSNRR.",
+    bio: "> LOAD_KERNEL: {zekai|ZEKAI} SHI... [OK]\n\nIncoming Ph.D. at XJTU.\n\n[MISSION_TARGET]:\nBridging Computer Vision & Earth Observation.\nBuilding a Universal Multi-modal Vision-Language Model to decode our planet.\n\n> STATUS: READY_TO_CONNECT_",
+    intro: "Incoming Ph.D. at XJTU.",
     labels: {
       newsTitle: "Latest Updates",
       pubTitle: "Publications",
@@ -87,8 +84,8 @@ const UI_LABELS = {
     name: "师 泽楷",
     role: "程序猿 / 研究牲",
     title: "地理视觉模型开发者",
-    bio: "> 加载内核用户: {shizekai|师泽楷}... [成功]\n\n{zhongguo|中国}科学院地理科学与资源研究所 准博士 (来自西安交通大学)。\n\n[核心任务]:\n连接计算机视觉与地球观测技术。\n构建通用的多模态视觉-语言模型以解码我们的星球。\n\n> 终端状态: 等待指令_",
-    intro: "中国科学院地理科学与资源研究所 准博士 (来自西安交通大学)。",
+    bio: "> 加载内核用户: {shizekai|师泽楷}... [成功]\n\n{zhongguo|中国}自西安交通大学 准博士。\n\n[核心任务]:\n连接计算机视觉与地球观测技术。\n构建通用的多模态视觉-语言模型以解码我们的星球。\n\n> 终端状态: 等待指令_",
+    intro: "西安交通大学 准博士。",
     labels: {
       newsTitle: "最新动态",
       pubTitle: "出版物",
@@ -188,7 +185,6 @@ function UnifiedCursor({ x, y, variant, theme }) {
   );
 }
 
-// --- 修复版：ThemeSwitcher 必须在 App 外部定义 ---
 function ThemeSwitcher({ theme, setTheme, toast, setCursorVariant }) {
   return (
     <div className="fixed bottom-8 right-8 z-50 flex flex-col gap-3 items-end">
@@ -198,7 +194,7 @@ function ThemeSwitcher({ theme, setTheme, toast, setCursorVariant }) {
         </div>
       )}
       <button 
-        aria-label={theme === 'retro' ? '切换到现代深色模式' : '切换到复古浅色模式'}
+        aria-label={theme === 'retro' ? 'Switch to Modern' : 'Switch to Retro'}
         onClick={() => setTheme(prev => prev === 'retro' ? 'modern' : 'retro')}
         onMouseEnter={() => setCursorVariant('hover')} 
         onMouseLeave={() => setCursorVariant('default')}
@@ -209,7 +205,6 @@ function ThemeSwitcher({ theme, setTheme, toast, setCursorVariant }) {
             : 'w-12 h-12 rounded-full bg-white text-black hover:scale-105'
           }
         `}
-        title={theme === 'retro' ? '切换到现代模式' : '切换到复古模式'}
       >
         {theme === 'retro' ? <Moon size={18} className="opacity-90" /> : <Sun size={20} className="opacity-90" />}
       </button>
@@ -217,6 +212,7 @@ function ThemeSwitcher({ theme, setTheme, toast, setCursorVariant }) {
   );
 }
 
+// 旋转的线框地球 (复古模式用)
 function WireframeEarth() {
   return (
     <div className="absolute -right-12 -bottom-20 w-72 h-72 opacity-25 pointer-events-none select-none">
@@ -344,49 +340,208 @@ function ModernLink({ href, icon, label, onClick }) {
   );
 }
 
-function WorldDots({ className = "" }) {
-  const [dots, setDots] = useState([]);
+// --- [终极优化] 粒子地球投影 (使用真实世界地图轮廓) ---
+const ParticleWorldMap = React.memo(({ className = "" }) => {
+  const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+
   useEffect(() => {
-    const land = feature(land110m, land110m.objects.land);
-    const width = 2000, height = 1000;
-    const projection = geoEquirectangular().fitExtent([[0, 0], [width, height]], land);
-    const canvas = document.createElement('canvas');
-    canvas.width = width; canvas.height = height;
-    const ctx = canvas.getContext('2d');
-    const path = geoPath(projection, ctx);
-    ctx.beginPath();
-    path(land);
-    const targetPoints = 10000;
-    const spacing = Math.max(10, Math.floor(Math.sqrt((width * height) / targetPoints)));
-    const pts = [];
-    for (let y = spacing / 2; y <= height; y += spacing) {
-      for (let x = spacing / 2; x <= width; x += spacing) {
-        if (ctx.isPointInPath(x, y)) {
-          const dur = 1 + Math.random();
-          const delay = Math.random() * 2;
-          pts.push({ x, y, dur, delay });
+    const canvas = canvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+    
+    const ctx = canvas.getContext('2d', { alpha: true });
+    let animationFrameId;
+    let particles = [];
+
+    // 真实世界地图简化轮廓 - 来源于 Natural Earth 110m 简化数据
+    // 经度 -180~180, 纬度 -90~90, 使用等距圆柱投影
+    const worldGeoData = [
+      // 北美洲
+      [[-130.7,55.5],[-122.6,59],[-117.2,60],[-108.8,62],[-97.5,64],[-89.5,67],[-87.5,68],[-79,74],[-73,78],[-60,82],[-45,81],[-28,83],[-10,81],[-29,78],[-64,73],[-67,68],[-61,66],[-62,60],[-66.5,55],[-67.5,47],[-70,44],[-67,41],[-74.5,35],[-81,31],[-81.5,25],[-88,25.5],[-90.5,28],[-97,26],[-99,27.5],[-104,29],[-106.5,31.5],[-111,31.5],[-117,32.5],[-121.5,34],[-124.5,40],[-124,43],[-123,46],[-122.5,49],[-130.7,55.5]],
+      // 格陵兰
+      [[-46,60],[-43,60],[-42,64],[-29,70],[-22,72],[-21,76],[-18,80],[-36,83],[-46,82],[-56,82],[-68,80],[-73,78],[-70,76],[-58,75],[-44,68],[-46,60]],
+      // 南美洲
+      [[-81.5,7],[-77,9],[-72,11.5],[-67,10],[-62,10.5],[-60,8],[-60,5],[-53,4],[-51,4],[-51,-1],[-47,-4],[-41,-3],[-39,-4],[-38,-12],[-39,-17],[-41,-22],[-48,-26],[-53,-34],[-58,-38],[-66,-55],[-68,-55],[-75,-53],[-74,-45],[-71,-40],[-73,-37],[-72,-33],[-71,-29],[-70,-24],[-70,-18],[-76,-14],[-79,-7],[-80,-3],[-78,1],[-81.5,7]],
+      // 非洲
+      [[-17,14],[-12,15],[-5,17],[0,22],[3,25],[10,31],[11,33],[10,35],[8,37],[-1,36],[-5,36],[-6,35],[-9,32],[-13,28],[-17,21],[-17,14]],
+      [[-13,12],[-16,13],[-17,14],[-17,21],[-13,28],[-9,32],[-6,35],[-5,36],[8,37],[10,35],[11,33],[10,31],[3,25],[0,22],[-5,17],[-12,15],[-13,12]],
+      [[10,31],[10,35],[11,33],[33,32],[35,31],[25,30],[20,31],[10,31]],
+      // 非洲主体
+      [[-17,14],[-17,21],[-13,28],[-9,32],[-6,35],[-5,36],[0,36],[8,37],[10,37],[11,34],[10,31],[33,32],[35,31],[37,30],[40,28],[43,25],[51,12],[51,3],[42,-2],[41,-11],[40,-15],[35,-22],[33,-29],[28,-33],[23,-35],[20,-35],[17,-29],[15,-27],[12,-17],[13,-12],[9,-5],[7,-1],[5,5],[2,6],[-4,5],[-8,4],[-13,12],[-17,14]],
+      // 马达加斯加
+      [[50,-12],[50,-25],[44,-25],[44,-12],[50,-12]],
+      // 欧洲
+      [[-10,36],[-9,43],[-2,43],[3,43],[4,51],[2,51],[-5,48],[-5,58],[5,62],[11,59],[12,54],[24,56],[28,60],[30,70],[20,70],[16,68],[10,64],[5,62],[-5,58],[-11,51],[-10,36]],
+      [[10,64],[16,68],[20,70],[30,70],[28,60],[24,56],[12,54],[11,59],[10,64]],
+      // 俄罗斯/亚洲北部
+      [[28,60],[30,70],[40,67],[50,70],[60,73],[70,73],[80,72],[90,74],[100,77],[110,77],[120,74],[130,71],[140,72],[150,70],[160,69],[170,66],[180,65],[180,50],[140,45],[130,48],[120,53],[90,50],[80,55],[70,55],[60,55],[50,55],[40,54],[30,55],[28,60]],
+      // 中国/东亚
+      [[75,40],[80,45],[90,50],[100,53],[110,53],[120,53],[130,48],[135,45],[130,40],[122,40],[122,32],[117,25],[110,20],[108,22],[100,22],[97,28],[90,28],[82,32],[75,35],[75,40]],
+      // 印度
+      [[68,24],[77,35],[88,28],[92,22],[88,16],[80,8],[77,8],[72,20],[68,24]],
+      // 东南亚半岛
+      [[92,22],[100,22],[108,22],[110,20],[109,12],[105,10],[100,3],[100,13],[98,16],[92,22]],
+      // 日本
+      [[130,31],[131,34],[136,35],[140,36],[141,41],[145,44],[145,40],[141,38],[140,36],[136,35],[131,34],[130,31]],
+      // 印尼 - 苏门答腊
+      [[95,6],[105,-6],[104,-6],[98,-1],[95,6]],
+      // 印尼 - 加里曼丹
+      [[109,7],[119,0],[117,-4],[109,0],[109,7]],
+      // 印尼 - 苏拉威西
+      [[119,-1],[121,-1],[122,-5],[120,-5],[119,-1]],
+      // 菲律宾
+      [[117,7],[122,19],[127,8],[122,5],[117,7]],
+      // 澳大利亚
+      [[113,-22],[114,-34],[117,-35],[130,-32],[137,-34],[141,-38],[147,-44],[154,-28],[153,-24],[149,-20],[145,-15],[142,-11],[136,-12],[129,-15],[122,-18],[114,-22],[113,-22]],
+      // 新西兰
+      [[166,-46],[174,-41],[178,-37],[178,-47],[170,-47],[166,-46]],
+      // 巴布亚新几内亚
+      [[141,-2],[141,-9],[150,-10],[155,-6],[150,-2],[141,-2]],
+      // 英国
+      [[-6,50],[-5,55],[0,61],[-2,58],[-3,54],[-5,54],[-6,50]],
+      // 冰岛
+      [[-24,64],[-14,66],[-14,64],[-21,63],[-24,64]],
+      // 斯里兰卡
+      [[80,6],[82,10],[80,10],[80,6]],
+      // 台湾
+      [[120,22],[122,25],[122,22],[120,22]],
+      // 韩国
+      [[126,34],[129,38],[128,34],[126,34]],
+      // 阿拉伯半岛
+      [[35,30],[43,28],[52,23],[55,17],[52,13],[43,13],[35,20],[35,30]],
+      // 中亚
+      [[50,55],[60,55],[70,55],[80,55],[75,40],[68,40],[55,42],[50,55]],
+    ];
+
+    const initParticles = () => {
+      const rect = container.getBoundingClientRect();
+      const width = Math.max(rect.width, 800);
+      const height = Math.max(rect.height, 500);
+      
+      canvas.width = width;
+      canvas.height = height;
+      
+      particles = [];
+      const particleSize = 2.5;
+      const gap = particleSize * 2.8;
+
+      // 经纬度转画布坐标 (等距圆柱投影)
+      const lonToX = (lon) => ((lon + 180) / 360) * width;
+      const latToY = (lat) => ((90 - lat) / 180) * height;
+
+      const convertPolygon = (geoPolygon) => {
+        return geoPolygon.map(([lon, lat]) => [lonToX(lon), latToY(lat)]);
+      };
+
+      worldGeoData.forEach(geoPolygon => {
+        const points = convertPolygon(geoPolygon);
+        
+        const minX = Math.min(...points.map(p => p[0]));
+        const maxX = Math.max(...points.map(p => p[0]));
+        const minY = Math.min(...points.map(p => p[1]));
+        const maxY = Math.max(...points.map(p => p[1]));
+
+        for (let x = minX; x < maxX; x += gap) {
+          for (let y = minY; y < maxY; y += gap) {
+            if (isPointInPolygon(x, y, points)) {
+              particles.push({
+                x,
+                y,
+                baseAlpha: Math.random() * 0.35 + 0.45,
+                phase: Math.random() * Math.PI * 2,
+                speed: Math.random() * 0.012 + 0.004,
+                size: particleSize
+              });
+            }
+          }
+        }
+      });
+    };
+
+    const isPointInPolygon = (x, y, polygon) => {
+      let inside = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const xi = polygon[i][0], yi = polygon[i][1];
+        const xj = polygon[j][0], yj = polygon[j][1];
+        if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+          inside = !inside;
         }
       }
-    }
-    setDots(pts);
+      return inside;
+    };
+
+    initParticles();
+
+    const render = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const time = Date.now() * 0.0012; // 适中的波浪速度
+
+      particles.forEach(p => {
+        p.phase += p.speed;
+        
+        // 闪烁效果 - 可以完全消失一段时间
+        const flickerWave = Math.sin(p.phase * 1.5);
+        // 当 flickerWave < -0.3 时，粒子消失
+        const flickerAlpha = flickerWave < -0.3 ? 0 : (flickerWave + 0.3) / 1.3;
+        const alpha = p.baseAlpha * flickerAlpha * 0.9;
+        
+        // 跳过完全透明的粒子
+        if (alpha < 0.02) return;
+        
+        // 颜色在 靛蓝 -> 紫色 -> 粉色 -> 白色 之间波浪式变换
+        const colorWave = Math.sin(time + p.x * 0.005 + p.y * 0.003);
+        const colorPhase = (colorWave + 1) / 2; // 0-1
+        
+        let r, g, b;
+        if (colorPhase < 0.33) {
+          // 靛蓝 #818cf8 -> 紫色 #a855f7
+          const t = colorPhase / 0.33;
+          r = Math.round(129 + (168 - 129) * t);
+          g = Math.round(140 + (85 - 140) * t);
+          b = Math.round(248 + (247 - 248) * t);
+        } else if (colorPhase < 0.66) {
+          // 紫色 #a855f7 -> 粉色 #ec4899
+          const t = (colorPhase - 0.33) / 0.33;
+          r = Math.round(168 + (236 - 168) * t);
+          g = Math.round(85 + (72 - 85) * t);
+          b = Math.round(247 + (153 - 247) * t);
+        } else {
+          // 粉色 #ec4899 -> 白色偏紫 #e0d4ff
+          const t = (colorPhase - 0.66) / 0.34;
+          r = Math.round(236 + (224 - 236) * t);
+          g = Math.round(72 + (212 - 72) * t);
+          b = Math.round(153 + (255 - 153) * t);
+        }
+        
+        ctx.globalAlpha = Math.min(0.95, alpha);
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    render();
+
+    const handleResize = () => initParticles();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      cancelAnimationFrame(animationFrameId);
+    };
   }, []);
+
   return (
-    <svg viewBox="0 0 2000 1000" className={className}>
-      <g shapeRendering="crispEdges">
-        {dots.map((p, i) => (
-          <circle
-            key={i}
-            cx={p.x}
-            cy={p.y}
-            r="2.6"
-            fill="#cfe0ff"
-            style={{ opacity: 0.95, animation: `randomFade ${p.dur}s ease-in-out infinite`, animationDelay: `${p.delay}s` }}
-          />
-        ))}
-      </g>
-    </svg>
+    <div ref={containerRef} className={className} style={{ width: '100%', height: '100%' }}>
+      <canvas ref={canvasRef} style={{ width: '100%', height: '100%' }} />
+    </div>
   );
-}
+});
 
 // ==========================================
 //               主程序入口 & 布局切换
@@ -404,14 +559,12 @@ export default function App() {
   const toggleLanguage = () => setLang(prev => prev === 'en' ? 'zh' : 'en');
   const triggerToast = (msg) => { setToast({ show: true, msg }); setTimeout(() => setToast({ show: false, msg: '' }), 3000); };
 
-  // 全局鼠标追踪
   useEffect(() => {
     const handleMouseMove = (e) => setMousePos({ x: e.clientX, y: e.clientY });
     window.addEventListener('mousemove', handleMouseMove);
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  // 鼠标点击状态
   useEffect(() => {
     const handleMouseDown = () => setCursorVariant('click');
     const handleMouseUp = () => setCursorVariant('default');
@@ -429,9 +582,7 @@ export default function App() {
         @keyframes spin-slow { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes turn-on { 0% { transform: scale(1, 0.002) scaleY(0) scaleX(0); opacity: 0; } 60% { transform: scale(1, 0.002) scaleY(1) scaleX(1); opacity: 1; } 100% { transform: scale(1, 1); opacity: 1; } }
         @keyframes slide-up { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        @keyframes dotBlink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
-        @keyframes dotWave { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(1.15); opacity: 1; } }
-        @keyframes randomFade { 0% { opacity: 1; } 50% { opacity: 0; } 100% { opacity: 1; } }
+        @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
         
         .font-pixel { font-family: 'Press Start 2P', 'Outfit', 'Noto Sans SC', sans-serif; }
         .font-sans-cool { font-family: 'Outfit', 'Noto Sans SC', sans-serif; }
@@ -439,18 +590,22 @@ export default function App() {
         .dot-matrix-bg { background-image: radial-gradient(#aec0ae 15%, transparent 15%); background-size: 14px 14px; }
         .bg-grid { background-size: 40px 40px; background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px); mask-image: linear-gradient(to bottom, black 40%, transparent 100%); }
         
+        .animate-enter { animation: slide-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+        .delay-100 { animation-delay: 0.1s; }
+        .delay-200 { animation-delay: 0.2s; }
+        .delay-300 { animation-delay: 0.3s; }
+
         body { cursor: none; } a, button { cursor: none; }
       `}</style>
 
-      {/* 公共组件 */}
       <UnifiedCursor x={mousePos.x} y={mousePos.y} variant={cursorVariant} theme={theme} />
       
-      {/* ⚠️ ThemeSwitcher 必须在 App 外部定义，这里直接调用 */}
       <ThemeSwitcher 
         theme={theme} 
         setTheme={setTheme} 
         toast={toast} 
         setCursorVariant={setCursorVariant} 
+        currentData={currentData}
       />
 
       {/* ====== 模式 A: 复古终端 (Retro) ====== */}
@@ -536,10 +691,16 @@ export default function App() {
               <div className="lg:col-span-8 animate-enter">
                 <div className="flex items-center gap-3 mb-6"><div className="px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium flex items-center gap-2"><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span></span>{currentData.role}</div><span className="text-zinc-500 text-sm font-mono">// {currentData.title}</span></div>
                 <h1 className="text-5xl md:text-7xl font-bold tracking-tight text-white mb-6 leading-[1.1]">{currentData.name === "ZEKAI SHI" ? (<>Building <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">Vision</span> for<br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">Our Planet.</span></>) : (<>用 <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">视觉技术</span><br/><span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">解码地球。</span></>)}</h1>
+                
                 <div className="relative">
                   <p className="text-xl text-zinc-400 leading-relaxed max-w-2xl mb-8 whitespace-pre-wrap">{currentData.bio.replace(/^>.*$/gm, '') .replace(/\[.*?\]:/g, '') .replace(/READY_TO_CONNECT_?/g, '') .replace(/等待指令_?/g, '') .trim()}</p>
-                  <WorldDots className="absolute right-0 -top-8 w-[70vw] h-[35vw] opacity-40 pointer-events-none select-none" />
+                  
+                  {/* --- 终极优化: Canvas 粒子地图 (无卡顿, 真实地图轮廓) --- */}
+                  <div className="absolute right-[-15%] -top-10 w-[110vw] h-[90vh] max-w-[1600px] max-h-[900px] opacity-30 pointer-events-none select-none" style={{ maskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)', WebkitMaskImage: 'linear-gradient(to bottom, black 60%, transparent 100%)' }}>
+                     <ParticleWorldMap className="w-full h-full" />
+                  </div>
                 </div>
+
                 <div className="flex flex-wrap gap-4"><a href={currentData.social.github} target="_blank" className="px-6 py-3 rounded-lg bg-white text-black font-semibold hover:bg-zinc-200 transition-colors flex items-center gap-2"><Github size={20} /> GitHub</a><a href={currentData.social.scholar} target="_blank" className="px-6 py-3 rounded-lg bg-white/5 text-white border border-white/10 hover:bg-white/10 transition-colors flex items-center gap-2"><Radio size={20} /> Scholar</a></div>
               </div>
               <div className="lg:col-span-4 animate-enter delay-100">
